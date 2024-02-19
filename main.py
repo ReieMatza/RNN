@@ -20,7 +20,7 @@ MINI_BATCH_SIZE = 20
 LEARNING_RATE = 0.001
 NUM_LAYERS = 2
 MODEL = "GRU"
-DROPOUT = 0.0
+DROPOUT = 0.5
 MODEL_SAVE_PATH = rf"{MODEL}_{DROPOUT}.pt"
 VOCAB_SAVE_PATH = r".\vocab.pt"
 PLOT_TITLE = f"preplexity vs epoc for {MODEL} Dropout = {DROPOUT}"
@@ -198,12 +198,12 @@ def main():
     vocab_path = VOCAB_SAVE_PATH if os.path.isfile(VOCAB_SAVE_PATH) else None
     train_data = Ex2_dataset(train_file, vocab_path)
     test_data = Ex2_dataset(test_file, vocab_path)
-
+    vocab_size = len(train_data.vocab)
     if MODEL == "LSTM":
-        training_prep, testing_prep = train(LSTMReie(len(train_data.vocab), dropout=DROPOUT, num_layers=NUM_LAYERS).to(device),
+        training_prep, testing_prep = train(LSTMReie(vocab_size, dropout=DROPOUT, num_layers=NUM_LAYERS).to(device),
                                             train_data, test_data)
     else:
-        training_prep, testing_prep = train(GRUReie(len(train_data.vocab), dropout=DROPOUT, num_layers=NUM_LAYERS).to(device),
+        training_prep, testing_prep = train(GRUReie(vocab_size, dropout=DROPOUT, num_layers=NUM_LAYERS).to(device),
                                             train_data, test_data)
 
 
