@@ -19,8 +19,8 @@ HIDDEN_DIM = 200
 MINI_BATCH_SIZE = 20
 LEARNING_RATE = 0.001
 NUM_LAYERS = 2
-MODEL = "GRU"
-DROPOUT = 0.5
+MODEL = "LSTM"
+DROPOUT = 0.0
 MODEL_SAVE_PATH = rf"{MODEL}_{DROPOUT}.pt"
 VOCAB_SAVE_PATH = r".\vocab.pt"
 PLOT_TITLE = f"preplexity vs epoc for {MODEL} Dropout = {DROPOUT}"
@@ -64,21 +64,24 @@ class Ex2_dataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         x = torch.as_tensor(self.vocab(self.data[index][0:SEQUENCE_LEN]))
         y = x[1:]
-        x = F.pad(x, (0, SEQUENCE_LEN- len(x)), 'constant', self.vocab(["<eos>"])[0])
-        y = F.pad(y, (0, SEQUENCE_LEN- len(y)), 'constant', self.vocab(["<eos>"])[0])
+        x = F.pad(x, (0, SEQUENCE_LEN - len(x)), 'constant', self.vocab(["<eos>"])[0])
+        y = F.pad(y, (0, SEQUENCE_LEN - len(y)), 'constant', self.vocab(["<eos>"])[0])
         return x, y
 
 
-class LSTMReie(nn.Module):
+class MYLSTM(nn.Module):
     def __init__(self, vocab_size: int, embedding_dim: int = EMBEDDING_DIM, hidden_dim: int = HIDDEN_DIM, dropout=0.0,
                  num_layers=1):
-        super(LSTMReie, self).__init__()
+        super(MYLSTM, self).__init__()
         self.hidden_dim = hidden_dim
         self.word_embedding = nn.Embedding(vocab_size, EMBEDDING_DIM)
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, dropout=dropout, num_layers=num_layers)
         self.fc = nn.Linear(self.hidden_dim, vocab_size)
 
-    def forward(self, x, prev_state = None):
+        self.word_embedding.weight.data.uniform_(-0.1, 0.1)
+        self.fc.weight.data.uniform_(-0.1, 0.1)
+
+    def forward(self, x, prev_state=None):
         embed = self.word_embedding(x)
         output, state = self.lstm(embed, prev_state) if prev_state else self.lstm(embed)
         logits = self.fc(output)
@@ -88,17 +91,20 @@ class LSTMReie(nn.Module):
     def get_init_state(self):
         state_hi = torch.zeros((NUM_LAYERS, SEQUENCE_LEN, HIDDEN_DIM)).to(device)
         state_ci = torch.zeros((NUM_LAYERS, SEQUENCE_LEN, HIDDEN_DIM)).to(device)
-        return state_hi,state_ci
+        return state_hi, state_ci
 
 
-class GRUReie(nn.Module):
+class MYGRU(nn.Module):
     def __init__(self, vocab_size: int, embedding_dim: int = EMBEDDING_DIM, hidden_dim: int = HIDDEN_DIM, dropout=0.0,
                  num_layers=1):
-        super(GRUReie, self).__init__()
+        super(MYGRU, self).__init__()
         self.hidden_dim = hidden_dim
         self.word_embedding = nn.Embedding(vocab_size, EMBEDDING_DIM)
         self.gru = nn.GRU(embedding_dim, hidden_dim, dropout=dropout, num_layers=num_layers, batch_first=True)
         self.fc = nn.Linear(self.hidden_dim, vocab_size)
+
+        self.word_embedding.weight.data.uniform_(-0.1, 0.1)
+        self.fc.weight.data.uniform_(-0.1, 0.1)
 
     def forward(self, x, prev_state=None):
         embed = self.word_embedding(x)
@@ -110,7 +116,6 @@ class GRUReie(nn.Module):
     def get_init_state(self):
         state_hi = torch.zeros((NUM_LAYERS, MINI_BATCH_SIZE, HIDDEN_DIM)).to(device)
         return state_hi
-
 
 
 def prep_plot(training_prep_list, testing_prep_list):
@@ -137,7 +142,7 @@ def preplexity(model: nn.Module, dataset):
     return preplexity.compute().cpu()
 
 
-def train(model: LSTMReie, train_data, test_data):
+def train(model: MYLSTM, train_data, test_data):
     training_prep, testing_prep = [], []
     num_of_mini_batches = len(train_data) / MINI_BATCH_SIZE
 
@@ -146,41 +151,42 @@ def train(model: LSTMReie, train_data, test_data):
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.5)
     train_loader = DataLoader(train_data, MINI_BATCH_SIZE)
 
-    if MODEL =="LSTM":
-        state_hi, state_ci = model.get_init_state()
-    elif MODEL == "GRU":
-        state_hi = model.get_init_state()
+    # if MODEL == "LSTM":
+    #     state_hi, _ = model.get_init_state()
+    # elif MODEL == "GRU":
+    #     state_hi = model.get_init_state()
 
     for epoch in range(NUM_OF_EPOCHS):
         model.train()
         for batch, (x, y) in enumerate(train_loader):
-            if x.size(0) == MINI_BATCH_SIZE:
-                optimizer.zero_grad()
-                if MODEL == "LSTM":
-                    state_hi = state_hi.detach()
-                    state_ci = state_ci.detach()
-                elif MODEL == "GRU":
-                    state_hi = state_hi.detach()
+            # if x.size(0) == MINI_BATCH_SIZE:
+            optimizer.zero_grad()
+            # if MODEL == "LSTM":
+            #     state_hi = state_hi.detach()
+            #     # state_ci = state_ci.detach()
+            # elif MODEL == "GRU":
+            #     state_hi = state_hi.detach()
 
-                x = x.to(device)
-                y = y.to(device)
+            x = x.to(device)
+            y = y.to(device)
 
-                # Forward pass
-                if MODEL == "LSTM":
-                    yi, (state_hi, state_ci) = model(x, (state_hi, state_ci))
-                elif MODEL == "GRU":
-                    yi, state_hi = model(x, state_hi)
+            # Forward pass
+            # if MODEL == "LSTM":
+            #     _, state_ci = model.get_init_state()
+            #     yi, (state_hi, _) = model(x, (state_hi, state_ci))
+            #     yi, _ = model(x)
+            # elif MODEL == "GRU":
+            yi, _ = model(x)
 
-                yi = yi.reshape(-1, len(train_data.vocab))
-                y = y.reshape(-1)
-                cost = loss(yi, y)
+            yi = yi.reshape(-1, len(train_data.vocab))
+            y = y.reshape(-1)
+            cost = loss(yi, y)
 
-                # Backward and optimize
-                cost.backward()
-                optimizer.step()
+            # Backward and optimize
+            cost.backward()
+            optimizer.step()
         if epoch >= 5:
             scheduler.step()
-
 
         preplexity_train = preplexity(model, train_data)
         training_prep.append(preplexity_train)
@@ -188,10 +194,21 @@ def train(model: LSTMReie, train_data, test_data):
         preplexity_test = preplexity(model, test_data)
         testing_prep.append(preplexity_test)
 
-        print(f"Epoch {epoch + 1} ot of {NUM_OF_EPOCHS}, preplexity_train {preplexity_train}, preplexity_test {preplexity_test}")
+        print(
+            f"Epoch {epoch + 1} ot of {NUM_OF_EPOCHS}, preplexity_train {preplexity_train}, preplexity_test {preplexity_test}")
     torch.save(model, MODEL_SAVE_PATH)
     return training_prep, testing_prep
 
+
+def play(sequence: str):
+    model = torch.load(MODEL_SAVE_PATH).to(device)
+    vocab = torch.load(VOCAB_SAVE_PATH)
+    input = sequence.split()
+    input = torch.as_tensor(vocab(input)).to(device)
+    yi,_ = model(input)
+    words = vocab.lookup_tokens(torch.argmax(yi,1).tolist())
+    print(f"input: {sequence}")
+    print(f"output: {words}")
 
 
 def main():
@@ -200,14 +217,32 @@ def main():
     test_data = Ex2_dataset(test_file, vocab_path)
     vocab_size = len(train_data.vocab)
     if MODEL == "LSTM":
-        training_prep, testing_prep = train(LSTMReie(vocab_size, dropout=DROPOUT, num_layers=NUM_LAYERS).to(device),
+        training_prep, testing_prep = train(MYLSTM(vocab_size, dropout=DROPOUT, num_layers=NUM_LAYERS).to(device),
                                             train_data, test_data)
     else:
-        training_prep, testing_prep = train(GRUReie(vocab_size, dropout=DROPOUT, num_layers=NUM_LAYERS).to(device),
+        training_prep, testing_prep = train(MYGRU(vocab_size, dropout=DROPOUT, num_layers=NUM_LAYERS).to(device),
                                             train_data, test_data)
-
 
     prep_plot(training_prep, testing_prep)
 
 
-main()
+def final_table():
+    vocab_path = VOCAB_SAVE_PATH if os.path.isfile(VOCAB_SAVE_PATH) else None
+    train_data = Ex2_dataset(train_file, vocab_path)
+    test_data = Ex2_dataset(test_file, vocab_path)
+    valid_data = Ex2_dataset(valid_file, vocab_path)
+    models_path = ["LSTM_0.0.pt","LSTM_0.5.pt","GRU_0.0.pt","GRU_0.5.pt"]
+    for i_m in models_path:
+        model = torch.load(i_m)
+        train_prep=preplexity(model,train_data)
+        test_prep = preplexity(model, test_data)
+        valid_prep = preplexity(model, valid_data)
+        print(f"model {i_m}: train_prep {train_prep}, test_prep {test_prep}, valid_prep {valid_prep}")
+
+
+
+# main()
+final_table()
+# play("although preliminary findings were reported more than a year ago the latest results appear in today")
+
+
