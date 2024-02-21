@@ -1,4 +1,9 @@
 # RNN
+Using Git hub, to evaluate the results simpy run the main.py file
+
+for training, you can change the parameters on the begging of the main.py file, then uncomment line 244.
+
+
 
 To use see the reaults we got using the google colab version:
 
